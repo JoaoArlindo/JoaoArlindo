@@ -68,13 +68,12 @@ function atualizarSubscritos8774() {
     const ultimaLinha = abaOrigem.getLastRow();
     const larguraLer  = Math.min(cfg.MAX_COLUNAS, abaOrigem.getLastColumn());
 
-    // Cabeçalho no destino (só se a aba estiver vazia).
-    if (abaDestino.getLastRow() === 0) {
-      const cab      = abaOrigem.getRange(cfg.LINHA_CABECALHO, 1, 1, larguraLer).getValues()[0];
-      const cabFinal = cfg.INDICES_COLUNAS.map(function (i) { return i < cab.length ? cab[i] : ''; });
-      abaDestino.getRange(1, 1, 1, cabFinal.length).setValues([cabFinal]);
-      SpreadsheetApp.flush();
-    }
+    // Cabeçalho: garante que a linha 1 do destino tenha o cabeçalho vindo da
+    // linha 3 da origem. Roda SEMPRE (idempotente), não só quando a aba está vazia.
+    const cabOrigem = abaOrigem.getRange(cfg.LINHA_CABECALHO, 1, 1, larguraLer).getValues()[0];
+    const cabFinal  = cfg.INDICES_COLUNAS.map(function (i) { return i < cabOrigem.length ? cabOrigem[i] : ''; });
+    _sub8774_garantirCabecalho(abaDestino, cabFinal);
+    SpreadsheetApp.flush();
 
     if (ultimaLinha < cfg.LINHA_DADOS) {
       _sub8774_avisar('ℹ️ A origem (COMERCIAL) não tem dados a partir da linha ' + cfg.LINHA_DADOS + '.');
@@ -133,6 +132,40 @@ function atualizarSubscritos8774() {
 // =============================================================
 //  AUXILIARES
 // =============================================================
+
+/**
+ * Garante que a linha 1 do destino contém `cabFinal`:
+ *  - aba vazia            → escreve o cabeçalho na linha 1;
+ *  - linha 1 já é igual   → não faz nada;
+ *  - linha 1 em branco    → escreve o cabeçalho na linha 1 (no lugar);
+ *  - linha 1 tem dados    → insere uma nova linha no topo e põe o cabeçalho
+ *                           (não sobrepõe dados existentes).
+ */
+function _sub8774_garantirCabecalho(abaDestino, cabFinal) {
+  const largura = cabFinal.length;
+
+  if (abaDestino.getLastRow() === 0) {
+    abaDestino.getRange(1, 1, 1, largura).setValues([cabFinal]);
+    return;
+  }
+
+  const row1  = abaDestino.getRange(1, 1, 1, largura).getValues()[0];
+  const vazia = row1.every(function (v) { return String(v == null ? '' : v).trim() === ''; });
+  const igual = !vazia && row1.every(function (v, i) {
+    return String(v == null ? '' : v).trim().toUpperCase() ===
+           String(cabFinal[i] == null ? '' : cabFinal[i]).trim().toUpperCase();
+  });
+
+  if (igual) return;                 // cabeçalho já presente
+
+  if (vazia) {                       // linha 1 vazia → escreve no lugar
+    abaDestino.getRange(1, 1, 1, largura).setValues([cabFinal]);
+    return;
+  }
+
+  abaDestino.insertRowBefore(1);     // linha 1 tem dados → preserva-os
+  abaDestino.getRange(1, 1, 1, largura).setValues([cabFinal]);
+}
 
 /** Lê as chaves (linha inteira normalizada) já presentes no destino. */
 function _sub8774_lerChavesDestino(abaDestino, largura) {
