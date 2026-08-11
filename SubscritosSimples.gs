@@ -4,7 +4,7 @@
 //  Origem : COMERCIAL da planilha 1XcHlMYLTHkye3Pp_qn6b9r9jqu7BwOztzVOUG1wfjOU
 //  Destino: aba SUBSCRITOS_8774 da planilha 146o1jU6VRO35XbTzWVY587hP0vy2s1SK35m5TT33H7U
 //
-//  Regra: importa as colunas F, G, H, L, BV
+//  Regra: importa as colunas F, G, H, L
 //         se, e somente se,  B = 8774  E  C ∈ {MATRICULADO, UPGRADE}.
 //  Cabeçalho da origem na linha 3 (dados a partir da linha 4).
 //  A aba de destino é criada na 1ª importação, se não existir.
@@ -22,9 +22,9 @@ const SUB8774 = {
   LINHA_DADOS:     4,   // 1ª linha de dados da origem
 
   // Colunas da origem a exportar (0-based):
-  // F=5, G=6, H=7, L=11, BV=73
-  INDICES_COLUNAS: [5, 6, 7, 11, 73],
-  MAX_COLUNAS:     74,  // largura de leitura (precisa alcançar BV = 74)
+  // F=5, G=6, H=7, L=11
+  INDICES_COLUNAS: [5, 6, 7, 11],
+  MAX_COLUNAS:     12,  // largura de leitura (precisa alcançar L = 12)
 
   // Filtro (0-based):
   FILTRO_B_IDX:  1,                            // coluna B
