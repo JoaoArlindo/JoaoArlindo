@@ -11,7 +11,8 @@ const CONFIG = {
     LINHA_CABECALHO:   3,
     LINHA_DADOS:       4,
     MAX_COLUNAS:       89,
-    INDICES_COLUNAS:   [1, 2, 5, 6, 7, 11, 12, 46, 85, 83, 88, 73],
+    // AU (46 = NUM WATSHAPP) e BV (73 = Perfil no Instagram?) removidas do import.
+    INDICES_COLUNAS:   [1, 2, 5, 6, 7, 11, 12, 85, 83, 88],
     FILTRO_STATUS_IDX: 2,
     FILTRO_TURMA_IDX:  1,
     FILTRO_STATUS_OK:  ['MATRICULADO', 'UPGRADE'],
@@ -27,7 +28,8 @@ const CONFIG = {
     LINHA_CABECALHO: 3,
     LINHA_DADOS:     4,
     MAX_COLUNAS:     89,
-    INDICES_COLUNAS: [1, 2, 5, 6, 7, 11, 12, 46, 85, 83, 88, 73],
+    // AU (46 = NUM WATSHAPP) e BV (73 = Perfil no Instagram?) removidas do import.
+    INDICES_COLUNAS: [1, 2, 5, 6, 7, 11, 12, 85, 83, 88],
     FILTRO_COL_IDX:  1,       // coluna B (0-based)
     FILTRO_VALOR:    '8774',  // B = 8774 (correspondência exata)
   },
