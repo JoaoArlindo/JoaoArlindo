@@ -55,7 +55,7 @@ const CONFIG = {
     SRC_LINHA_DADOS: 2,
     DST_LINHA_DADOS: 2,
     SRC_NUM_COLS:    13,     // largura FIXA de propósito (evita timeout)
-    DST_NUM_COLS:    7,      // DIRETORES = A(ID)..G(REDE SOCIAL)
+    DST_NUM_COLS:    6,      // DIRETORES = A(ID)..F(DATA CONDECORAÇÃO) — REDE SOCIAL (G) removida
     FILTRO_COL_IDX:  6,      // col G (DIRETOR) na origem
     FILTRO_TXT:      'JANINE BARBOSA - ID 7388',  // frase específica: sem falso positivo numérico
 
@@ -74,16 +74,8 @@ const CONFIG = {
       { src: 6,  dst: 4 },   // G DIRETOR           → D DIRETOR
       { src: 9,  dst: 5 },   // J FOI CONDECORADO?  → E FOI CONDECORADO?
       { src: 10, dst: 6 },   // K DATA CONDECORAÇÃO → F DATA CONDECORAÇÃO
-      // REDE SOCIAL (G) NÃO entra aqui: é preenchida via SUBSCRITOS_2025.
+      // REDE SOCIAL (G) removida — a aba DIRETORES vai apenas até F.
     ],
-
-    REDE_SOCIAL: {
-      ABA:         'SUBSCRITOS_2025',
-      LINHA_DADOS: 2,
-      ID_COL:      3,    // col C (ID), 1-based
-      VALOR_COL:   12,   // col L (Perfil no Instagram?), 1-based
-      DST_COL:     7,    // col G (REDE SOCIAL) em DIRETORES, 1-based
-    },
   },
 };
 
@@ -448,7 +440,7 @@ function importarSubscritos2020() {
 //  Passo 0: remove duplicados existentes (D2: mantém a linha CONDECORADA).
 //  D1 (decisão): mantém-se APPEND-ONLY — registros já existentes NÃO são
 //  atualizados a partir da origem, para não sobrepor edições manuais no destino.
-//  Enriquecimento da REDE SOCIAL (col G) via SUBSCRITOS_2025.
+//  A antiga coluna REDE SOCIAL (col G) é apagada ao final (feature removida).
 // =============================================================
 
 function importarDiretores() {
@@ -503,7 +495,7 @@ function importarDiretores() {
       const chave = _chaveDiretor(orig[cfg.CHAVE_ID_SRC_IDX], orig[cfg.CHAVE_NOME_SRC_IDX], orig[cfg.CHAVE_NOMEN_SRC_IDX]);
       if (existentes.has(chave) || vistos.has(chave)) { pulados++; continue; }
 
-      const linha = new Array(largura).fill('');   // G fica '' — preenchida no passo final
+      const linha = new Array(largura).fill('');
       cfg.MAP.forEach(function (m) { linha[m.dst - 1] = orig[m.src]; });
       novos.push(linha);
       vistos.add(chave);
@@ -517,12 +509,12 @@ function importarDiretores() {
       SpreadsheetApp.flush();
     }
 
-    const preenchidos = _preencherRedeSocial(abaDestino, cfg);
+    const redeSocialApagada = _limparRedeSocial(abaDestino);
 
     _avisar('✅ Diretores: ' + novos.length + ' novo(s) adicionado(s).\n' +
             'Duplicados removidos: ' + removidosAntes + '.\n' +
             casaram + ' casaram com o filtro, ' + pulados + ' já existiam.\n' +
-            'Rede social preenchida em ' + preenchidos + ' linha(s).');
+            'Rede social (col G) apagada em ' + redeSocialApagada + ' linha(s).');
 
   } catch (e) {
     _logErro(NOME, e);
@@ -547,13 +539,13 @@ function limparDuplicadosDiretores() {
 
   const cfg = CONFIG.DIRETORES;
   try {
-    const abaDestino  = _abrirAbaLocal(cfg.ABA_DESTINO);
-    const removidos   = _removerDuplicadosPorId(abaDestino, cfg);
-    const preenchidos = _preencherRedeSocial(abaDestino, cfg);
+    const abaDestino        = _abrirAbaLocal(cfg.ABA_DESTINO);
+    const removidos         = _removerDuplicadosPorId(abaDestino, cfg);
+    const redeSocialApagada = _limparRedeSocial(abaDestino);
     SpreadsheetApp.flush();
     _avisar('🧹 Limpeza concluída.\n' +
             'Diretores duplicados removidos: ' + removidos + '.\n' +
-            'Rede social preenchida em ' + preenchidos + ' linha(s).');
+            'Rede social (col G) apagada em ' + redeSocialApagada + ' linha(s).');
   } catch (e) {
     _logErro(NOME, e);
     _avisar('❌ Erro: ' + e.message);
@@ -659,52 +651,17 @@ function _removerDuplicadosPorId(abaDestino, cfg) {
 }
 
 /**
- * Preenche a REDE SOCIAL (col G) de DIRETORES cruzando o ID (col A) com
- * SUBSCRITOS_2025 (ID col C → valor col L). Sem correspondência → '' (limpa #N/A).
+ * Apaga por completo a antiga coluna REDE SOCIAL (col G) da aba DIRETORES,
+ * incluindo o cabeçalho. Idempotente. Retorna quantas linhas foram limpas.
  */
-function _preencherRedeSocial(abaDestino, cfg) {
-  const rs = cfg.REDE_SOCIAL;
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const abaSub = ss.getSheetByName(rs.ABA);
-  if (!abaSub) { Logger.log('[REDE SOCIAL] Aba "' + rs.ABA + '" não encontrada.'); return 0; }
-
-  const mapa      = {};
-  const ultimaSub = abaSub.getLastRow();
-  if (ultimaSub >= rs.LINHA_DADOS) {
-    const nSub       = ultimaSub - rs.LINHA_DADOS + 1;
-    const larguraSub = Math.max(rs.ID_COL, rs.VALOR_COL);
-    const dadosSub   = abaSub.getRange(rs.LINHA_DADOS, 1, nSub, larguraSub).getValues();
-    dadosSub.forEach(function (r) {
-      const id = String(r[rs.ID_COL - 1] == null ? '' : r[rs.ID_COL - 1]).trim();
-      if (id === '') return;
-      const valor = (r[rs.VALOR_COL - 1] == null ? '' : r[rs.VALOR_COL - 1]);
-      if (!(id in mapa) || (String(mapa[id]).trim() === '' && String(valor).trim() !== '')) {
-        mapa[id] = valor;
-      }
-    });
-  }
-  Logger.log('[REDE SOCIAL] IDs no mapa: ' + Object.keys(mapa).length);
-
-  const ultimaDst = abaDestino.getLastRow();
-  if (ultimaDst < cfg.DST_LINHA_DADOS) return 0;
-
-  const nDst = ultimaDst - cfg.DST_LINHA_DADOS + 1;
-  const ids  = abaDestino.getRange(cfg.DST_LINHA_DADOS, 1, nDst, 1).getValues();
-
-  let preenchidos = 0;
-  const colG = ids.map(function (row) {
-    const id = String(row[0] == null ? '' : row[0]).trim();
-    if (id !== '' && (id in mapa) && String(mapa[id]).trim() !== '') {
-      preenchidos++;
-      return [mapa[id]];
-    }
-    return [''];
-  });
-
-  abaDestino.getRange(cfg.DST_LINHA_DADOS, rs.DST_COL, nDst, 1).setValues(colG);
+function _limparRedeSocial(abaDestino) {
+  const COL_G  = 7;   // col G (antiga REDE SOCIAL), 1-based
+  const ultima = abaDestino.getLastRow();
+  if (ultima < 1) return 0;
+  abaDestino.getRange(1, COL_G, ultima, 1).clearContent();
   SpreadsheetApp.flush();
-  Logger.log('[REDE SOCIAL] Preenchidas: ' + preenchidos + ' de ' + nDst);
-  return preenchidos;
+  Logger.log('[REDE SOCIAL] Coluna G apagada em ' + ultima + ' linha(s).');
+  return ultima;
 }
 
 /** Chave de identidade: usa o ID; se vazio, cai para NOME|NOMENCLATURA. */
