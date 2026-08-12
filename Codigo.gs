@@ -19,21 +19,6 @@ const CONFIG = {
     FILTRO_TURMA_OK:   '7388',
   },
 
-  // ---- IMPORTAÇÃO 8774: origem é a MESMA planilha (JETHRO COMERCIAL) ----
-  // Regra única: importa da aba COMERCIAL as linhas em que a coluna B = 8774.
-  // Não há filtro de status (importa se, e somente se, B = 8774).
-  SUBSCRITOS_8774: {
-    ABA_ORIGEM:      'COMERCIAL',
-    ABA_DESTINO:     'SUBSCRITOS_8774',
-    LINHA_CABECALHO: 3,
-    LINHA_DADOS:     4,
-    MAX_COLUNAS:     89,
-    // AU (46 = NUM WATSHAPP) e BV (73 = Perfil no Instagram?) removidas do import.
-    INDICES_COLUNAS: [1, 2, 5, 6, 7, 11, 12, 85, 83, 88],
-    FILTRO_COL_IDX:  1,       // coluna B (0-based)
-    FILTRO_VALOR:    '8774',  // B = 8774 (correspondência exata)
-  },
-
   // ---- IMPORTAÇÃO 2020: origem é OUTRA planilha (não a JETHRO COMERCIAL) ----
   SUBSCRITOS_2020: {
     ID_ORIGEM:         '1KjTMgpe1m9TftwCd2Wtwfr59z2fyGiwxHIDZCHLtokU',
@@ -91,7 +76,6 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('➡️ Importações')
     .addItem('Atualizar Subscritos 2025',         'importarSubscritos')
-    .addItem('Importar Subscritos 8774',          'importarSubscritos8774')
     .addItem('Importar Subscritos 2020',          'importarSubscritos2020')
     .addItem('Importar Novos Diretores',          'importarDiretores')
     .addItem('🧹 Remover Diretores Duplicados',    'limparDuplicadosDiretores')
@@ -113,8 +97,8 @@ function criarGatilhos() {
 }
 
 function removerGatilhos() {
-  // R1: inclui as funções de continuação para também apagar os seus gatilhos de relógio.
-  const funcoes = ['importarSubscritos', 'importarSubscritos8774', 'importarDiretores', 'importarSubscritos2020'];
+  // R1: inclui 'importarSubscritos2020' para também apagar gatilhos de continuação dele.
+  const funcoes = ['importarSubscritos', 'importarDiretores', 'importarSubscritos2020'];
   let removidos = 0;
   ScriptApp.getProjectTriggers().forEach(t => {
     if (funcoes.includes(t.getHandlerFunction())) {
@@ -206,101 +190,6 @@ function importarSubscritos() {
     SpreadsheetApp.flush();
     _limparEstado(CHAVE_EST);
     _avisar('✅ Subscritos atualizados!\n' + totalImportado + ' registros importados.');
-
-  } catch (e) {
-    _logErro(NOME, e);
-    _avisar('❌ Erro: ' + e.message);
-  } finally {
-    lock.releaseLock();   // R3: liberta o lock (inclusive nas saídas de continuação)
-  }
-}
-
-// =============================================================
-//  IMPORTAÇÃO 1A — SUBSCRITOS_8774  (mesma origem JETHRO COMERCIAL)
-//  Escreve o cabeçalho (linha 3 da origem) + TODAS as linhas em que a
-//  coluna B = 8774, a partir de A1 do destino. Não há filtro de status:
-//  importa se, e somente se, B = 8774.
-//  Mesmo layout de saída do SUBSCRITOS_2025 (INDICES_COLUNAS).
-//  R3: lock de execução.  R2: estado de continuação com TTL.
-// =============================================================
-
-function importarSubscritos8774() {
-  const NOME      = 'importarSubscritos8774';
-  const CHAVE_EST = 'SUBSCRITOS_8774';
-
-  // R3: adquire o lock. Se já há execução, reagenda a continuação (se pendente) e sai.
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(2000)) {
-    const temEstado = _carregarEstado(CHAVE_EST).linhaAtual !== undefined;
-    if (temEstado) _agendarContinuacao(NOME);
-    Logger.log('[' + NOME + '] Lock ocupado. ' + (temEstado ? 'Continuação reagendada.' : 'Abortado.'));
-    return;
-  }
-
-  const cfg       = CONFIG.SUBSCRITOS_8774;
-  const startTime = Date.now();
-  try {
-    let estado        = _carregarEstado(CHAVE_EST);
-    let ehContinuacao = estado.linhaAtual !== undefined;
-
-    // R2: estado antigo/órfão → recomeça do zero em vez de retomar dados obsoletos.
-    if (ehContinuacao && (!estado.ts || (Date.now() - estado.ts > ESTADO_TTL_MS))) {
-      Logger.log('[' + NOME + '] Estado órfão descartado. Reinício do zero.');
-      _limparEstado(CHAVE_EST); estado = {}; ehContinuacao = false;
-    }
-
-    const abaOrigem   = _abrirAba(CONFIG.ID_ORIGEM, cfg.ABA_ORIGEM);
-    const ultimaLinha = abaOrigem.getLastRow();
-    const abaDestino  = _abrirOuCriarAbaLocal(cfg.ABA_DESTINO);
-
-    if (ultimaLinha < cfg.LINHA_DADOS) {
-      _avisar('ℹ️ Não há dados para importar em COMERCIAL.');
-      _limparEstado(CHAVE_EST);
-      return;
-    }
-
-    if (!ehContinuacao) {
-      const cabecalho = abaOrigem.getRange(cfg.LINHA_CABECALHO, 1, 1, cfg.MAX_COLUNAS).getValues()[0];
-      const cabecalhoFinal = cfg.INDICES_COLUNAS.map(function (i) { return cabecalho[i]; });
-      abaDestino.getDataRange().clearContent();
-      abaDestino.getRange(1, 1, 1, cabecalhoFinal.length).setValues([cabecalhoFinal]);
-    }
-
-    let linhaAtual     = ehContinuacao ? estado.linhaAtual     : cfg.LINHA_DADOS;
-    let totalImportado = ehContinuacao ? estado.totalImportado : 0;
-
-    while (linhaAtual <= ultimaLinha) {
-      if (Date.now() - startTime > MAX_EXEC_MS) {
-        _salvarEstado(CHAVE_EST, { linhaAtual: linhaAtual, totalImportado: totalImportado, ts: Date.now() });
-        _agendarContinuacao(NOME);
-        Logger.log('[' + NOME + '] Pausado na linha ' + linhaAtual + '. Continuação agendada.');
-        return;
-      }
-
-      const linhasNoChunk = Math.min(CHUNK_SIZE, ultimaLinha - linhaAtual + 1);
-      const chunk = abaOrigem.getRange(linhaAtual, 1, linhasNoChunk, cfg.MAX_COLUNAS).getValues();
-
-      // Filtro único: coluna B = 8774 (correspondência exata, ignorando espaços).
-      const dadosFiltrados = chunk
-        .filter(function (l) {
-          return String(l[cfg.FILTRO_COL_IDX]).trim() === cfg.FILTRO_VALOR;
-        })
-        .map(function (l) { return cfg.INDICES_COLUNAS.map(function (i) { return l[i]; }); });
-
-      if (dadosFiltrados.length > 0) {
-        const proxLinha = abaDestino.getLastRow() + 1;
-        abaDestino.getRange(proxLinha, 1, dadosFiltrados.length, dadosFiltrados[0].length).setValues(dadosFiltrados);
-        totalImportado += dadosFiltrados.length;
-      }
-
-      linhaAtual += CHUNK_SIZE;
-    }
-
-    SpreadsheetApp.flush();
-    _limparEstado(CHAVE_EST);
-    _limparTriggersDe(NOME);
-    _avisar('✅ Subscritos 8774 importados!\n' + totalImportado +
-            ' registro(s) com B = ' + cfg.FILTRO_VALOR + ' em ' + cfg.ABA_DESTINO + '.');
 
   } catch (e) {
     _logErro(NOME, e);
