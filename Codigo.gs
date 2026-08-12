@@ -542,15 +542,24 @@ function _removerDuplicadosPorId(abaDestino, cfg) {
 /**
  * Apaga por completo a antiga coluna REDE SOCIAL (col G) da aba DIRETORES,
  * incluindo o cabeçalho. Idempotente. Retorna quantas linhas foram limpas.
+ * À PROVA DE FALHAS: nunca lança para fora — se a aba não tiver a coluna G
+ * (ou der qualquer erro), apenas regista no log e devolve 0, para NÃO abortar
+ * a importação dos diretores.
  */
 function _limparRedeSocial(abaDestino) {
-  const COL_G  = 7;   // col G (antiga REDE SOCIAL), 1-based
-  const ultima = abaDestino.getLastRow();
-  if (ultima < 1) return 0;
-  abaDestino.getRange(1, COL_G, ultima, 1).clearContent();
-  SpreadsheetApp.flush();
-  Logger.log('[REDE SOCIAL] Coluna G apagada em ' + ultima + ' linha(s).');
-  return ultima;
+  const COL_G = 7;   // col G (antiga REDE SOCIAL), 1-based
+  try {
+    const ultima = abaDestino.getLastRow();
+    if (ultima < 1) return 0;
+    if (abaDestino.getMaxColumns() < COL_G) return 0;   // a aba nem tem coluna G
+    abaDestino.getRange(1, COL_G, ultima, 1).clearContent();
+    SpreadsheetApp.flush();
+    Logger.log('[REDE SOCIAL] Coluna G apagada em ' + ultima + ' linha(s).');
+    return ultima;
+  } catch (e) {
+    Logger.log('[REDE SOCIAL] Falha ao limpar col G (ignorada): ' + e.message);
+    return 0;
+  }
 }
 
 /** Chave de identidade: usa o ID; se vazio, cai para NOME|NOMENCLATURA. */
